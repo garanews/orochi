@@ -9,7 +9,12 @@ class DumpForm(FileFormMixin, forms.ModelForm):
 
     class Meta:
         model = Dump
-        fields = ("upload", "name", "operating_system", "color")
+        fields = (
+            "upload",
+            "name",
+            "operating_system",
+            "color",
+        )
 
 
 class EditDumpForm(forms.ModelForm):
@@ -23,10 +28,24 @@ class EditDumpForm(forms.ModelForm):
         self.fields["authorized_users"].choices = [
             (x.pk, x.username) for x in get_user_model().objects.exclude(pk=user.pk)
         ]
+        if self.instance.operating_system != "Linux":
+            del self.fields["family"]
+            del self.fields["kernel"]
+            del self.fields["architecture"]
+        del self.fields["operating_system"]
 
     class Meta:
         model = Dump
-        fields = ("name", "color", "index", "authorized_users")
+        fields = (
+            "name",
+            "color",
+            "index",
+            "operating_system",
+            "family",
+            "kernel",
+            "architecture",
+            "authorized_users",
+        )
         widgets = {"index": forms.HiddenInput()}
 
 

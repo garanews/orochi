@@ -7,11 +7,28 @@ from django.dispatch import receiver
 from guardian.shortcuts import assign_perm
 
 OPERATING_SYSTEM = (
+    (None, "---"),
     ("Linux", "Linux"),
     ("Windows", "Windows"),
     ("Mac", "Mac"),
     ("Other", "Other"),
 )
+
+OS_FAMILY = (
+    (None, "---"),
+    ("Debian", "Debian"),
+    ("Ubuntu", "Ubuntu"),
+    ("Fedora", "Fedora"),
+)
+
+OS_ARCHITECTURE = (
+    (None, "---"),
+    ("x86", "x86"),
+    ("x64", "x64"),
+    ("arm", "arm"),
+    ("amd64", "amd64"),
+)
+
 SERVICES = ((1, "VirusTotal"),)
 
 
@@ -60,6 +77,11 @@ class Dump(models.Model):
     operating_system = models.CharField(
         choices=OPERATING_SYSTEM, default="Linux", max_length=10
     )
+    family = models.CharField(choices=OS_FAMILY, max_length=50, blank=True, null=True)
+    kernel = models.CharField(max_length=250, blank=True, null=True)
+    architecture = models.CharField(
+        choices=OS_ARCHITECTURE, max_length=10, blank=True, null=True
+    )
     upload = models.FileField(upload_to="uploads")
     name = models.CharField(max_length=250, unique=True)
     index = models.CharField(max_length=250, unique=True)
@@ -68,6 +90,15 @@ class Dump(models.Model):
     color = ColorField(default="#FF0000")
     status = models.PositiveSmallIntegerField(choices=STATUS, default=1)
     plugins = models.ManyToManyField(Plugin, through="Result")
+
+    @property
+    def symbols(self):
+        return "{} {} {} {}".format(
+            self.get_operating_system_display(),
+            self.get_family_display(),
+            self.kernel,
+            self.get_architecture_display(),
+        )
 
     def __str__(self):
         return self.name

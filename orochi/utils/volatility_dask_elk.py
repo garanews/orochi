@@ -1,5 +1,6 @@
 import io
 import os
+import time
 import attr
 import uuid
 import traceback
@@ -8,6 +9,7 @@ import json
 import tempfile
 import pathlib
 import datetime
+import logging
 
 import pyclamd
 import virustotal3.core
@@ -42,6 +44,8 @@ from volatility.framework import (
 
 from zipfile import ZipFile, is_zipfile
 from elasticsearch import Elasticsearch, helpers
+from elasticsearch_dsl import Search
+
 from orochi.website.models import (
     Dump,
     Plugin,
@@ -49,6 +53,8 @@ from orochi.website.models import (
     ExtractedDump,
     UserPlugin,
     Service,
+    OS_ARCHITECTURE,
+    OS_FAMILY,
 )
 
 from dask import delayed
@@ -287,7 +293,8 @@ def run_regipy(result_pk, filepath):
         reg_json = registry_hive.recurse_subkeys(registry_hive.root, as_json=True)
         root = {"values": [attr.asdict(entry) for entry in reg_json]}
         root = json.loads(json.dumps(root).replace(r"\u0000", ""))
-    except Exception:
+    except Exception as e:
+        logging.error(e)
         root = {}
 
     ed = ExtractedDump.objects.get(result__pk=result_pk, path=filepath)
@@ -321,11 +328,12 @@ def send_to_ws(dump, result, plugin_name):
         )
 
 
-def run_plugin(dump_obj, plugin_obj, es_url, params=None):
+def run_plugin(dump_obj, plugin_obj, params=None):
     """
     Execute a single plugin on a dump with optional params.
     If success data are sent to elastic.
     """
+    logging.debug("[dump {} - plugin {}] start".format(dump_obj.pk, plugin_obj.pk))
     try:
         ctx = contexts.Context()
         constants.PARALLELISM = constants.Parallelism.Off
@@ -371,6 +379,12 @@ def run_plugin(dump_obj, plugin_obj, es_url, params=None):
             )
             ctx.config[extended_path] = True
 
+        logging.debug(
+            "[dump {} - plugin {}] params: {}".format(
+                dump_obj.pk, plugin_obj.pk, ctx.config
+            )
+        )
+
         file_list = []
         if local_dump:
             # IF PARAM/ADMIN DUMP CREATE FILECONSUMER
@@ -409,6 +423,11 @@ def run_plugin(dump_obj, plugin_obj, es_url, params=None):
             )
             result.save()
             send_to_ws(dump_obj, result, plugin_obj.name)
+
+            logging.error(
+                "[dump {} - plugin {}] unsatisfied".format(dump_obj.pk, plugin_obj.pk)
+            )
+
             return 0
         try:
             runned_plugin = constructed.run()
@@ -422,6 +441,9 @@ def run_plugin(dump_obj, plugin_obj, es_url, params=None):
             result.description = "\n".join(fulltrace)
             result.save()
             send_to_ws(dump_obj, result, plugin_obj.name)
+            logging.error(
+                "[dump {} - plugin {}] generic error".format(dump_obj.pk, plugin_obj.pk)
+            )
             return 0
 
         # RENDER OUTPUT IN JSON AND PUT IT IN ELASTIC
@@ -489,7 +511,7 @@ def run_plugin(dump_obj, plugin_obj, es_url, params=None):
                     rejoin()
 
             es = Elasticsearch(
-                [es_url],
+                [settings.ELASTICSEARCH_URL],
                 request_timeout=60,
                 timeout=60,
                 max_retries=10,
@@ -508,12 +530,22 @@ def run_plugin(dump_obj, plugin_obj, es_url, params=None):
             result.result = 2
             result.description = error
             result.save()
+
+            logging.debug(
+                "[dump {} - plugin {}] sent to elastic".format(
+                    dump_obj.pk, plugin_obj.pk
+                )
+            )
         else:
             # OK BUT EMPTY
             result = Result.objects.get(plugin=plugin_obj, dump=dump_obj)
             result.result = 1
             result.description = error
             result.save()
+
+            logging.debug(
+                "[dump {} - plugin {}] empty".format(dump_obj.pk, plugin_obj.pk)
+            )
         send_to_ws(dump_obj, result, plugin_obj.name)
         return 0
 
@@ -525,12 +557,42 @@ def run_plugin(dump_obj, plugin_obj, es_url, params=None):
         result.description = "\n".join(fulltrace)
         result.save()
         send_to_ws(dump_obj, result, plugin_obj.name)
+        logging.error(
+            "[dump {} - plugin {}] generic error".format(dump_obj.pk, plugin_obj.pk)
+        )
         return 0
 
 
-def unzip_then_run(dump_pk, user_pk, es_url):
+def check_os(result):
+    es_client = Elasticsearch([settings.ELASTICSEARCH_URL])
+    s = Search(
+        using=es_client,
+        index="{}_{}".format(result.dump.index, result.plugin.name.lower()),
+    )
+    banners = [hit.to_dict().get("Banner", None) for hit in s.execute()]
+    logging.error("banners: {}".format(banners))
+    for hit in banners:
+        if hit.find("Linux version") != -1:
+            info = hit.strip().split()[2]
+            kernel, *_, architecture = info.split("-")
+            if architecture not in [x for (x, _) in OS_ARCHITECTURE]:
+                architecture = None
+            if hit.lower().find("debian") != -1:
+                family = "Debian"
+            elif hit.lower().find("ubuntu") != -1:
+                family = "Ubuntu"
+            else:
+                result.dump.description = hit.strip()
+            return {"family": family, "architecture": architecture, "kernel": kernel}
+        else:
+            logging.error("[dump {}] symbol hit: {}".format(result.dump.pk, hit))
+    return {"family": None, "architecture": None, "kernel": None}
+
+
+def unzip_then_run(dump_pk, user_pk):
 
     dump = Dump.objects.get(pk=dump_pk)
+    logging.debug("[dump {}] Processing".format(dump_pk))
 
     # Unzip file is zipped
     if is_zipfile(dump.upload.path):
@@ -551,6 +613,7 @@ def unzip_then_run(dump_pk, user_pk, es_url):
 
             else:
                 # zip is unvalid
+                logging.error("[dump {}] Invalid zipped dump data".format(dump_pk))
                 dump.status = 4
                 dump.save()
                 return
@@ -560,14 +623,34 @@ def unzip_then_run(dump_pk, user_pk, es_url):
     dump.upload.name = newpath
     dump.save()
 
+    # check symbols using banners
+    if dump.operating_system == "Linux":
+        banner = dump.result_set.get(plugin__name="banners.Banners")
+        if banner:
+            run_plugin(dump, banner.plugin)
+            time.sleep(1)
+            os = check_os(banner)
+            dump.family = os["family"]
+            dump.architecture = os["architecture"]
+            dump.kernel = os["kernel"]
+            logging.error("[dump {}] guessed symbols {}".format(dump_pk, os))
+            dump.save()
+
     dask_client = get_client()
     secede()
     tasks = []
-    for result in dump.result_set.all():
+    tasks_list = (
+        dump.result_set.all()
+        if dump.operating_system != "Linux"
+        else dump.result_set.exclude(plugin__name="banners.Banners")
+    )
+    for result in tasks_list:
         if result.result != 5:
-            task = dask_client.submit(run_plugin, dump, result.plugin, es_url)
+            task = dask_client.submit(run_plugin, dump, result.plugin)
             tasks.append(task)
     results = dask_client.gather(tasks)
+    logging.debug("[dump {}] tasks submitted".format(dump_pk))
     rejoin()
     dump.status = 2
     dump.save()
+    logging.debug("[dump {}] processing terminated".format(dump_pk))

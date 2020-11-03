@@ -6,29 +6,36 @@ import json
 import shlex
 
 from glob import glob
+from urllib.request import pathname2url
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.contrib.auth.decorators import login_required
+from django.conf import settings
+from django.core import management, serializers
 from django.db import transaction
-from django.core import serializers
-from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, Http404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
-from django.conf import settings
-
-from django.core import management
-
-from urllib.request import pathname2url
 
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
 
-from django.contrib.auth.decorators import login_required
 from guardian.shortcuts import get_objects_for_user, get_perms, assign_perm, remove_perm
 
-from orochi.website.models import Dump, Plugin, Result, ExtractedDump, UserPlugin
-from orochi.website.forms import DumpForm, EditDumpForm, ParametersForm
+from orochi.website.models import (
+    Dump,
+    Plugin,
+    Result,
+    ExtractedDump,
+    UserPlugin,
+)
+from orochi.website.forms import (
+    DumpForm,
+    EditDumpForm,
+    ParametersForm,
+)
 
 from dask import delayed
 from dask.distributed import Client, fire_and_forget
@@ -38,8 +45,6 @@ from orochi.utils.volatility_dask_elk import unzip_then_run, run_plugin, get_par
 ##############################
 # CHANGELOG
 ##############################
-
-
 @login_required
 def changelog(request):
     """
@@ -56,8 +61,6 @@ def changelog(request):
 ##############################
 # PLUGIN
 ##############################
-
-
 @login_required
 def plugins(request):
     """
@@ -220,8 +223,6 @@ def parameters(request):
 ##############################
 # RESULTS
 ##############################
-
-
 @login_required
 def analysis(request):
     """
@@ -602,26 +603,35 @@ def edit(request):
     """
     data = dict()
 
+    # GET OBJECT AND CHECK PERMISSIONS
     if request.method == "POST":
         dump = get_object_or_404(Dump, index=request.POST.get("index"))
-        if dump not in get_objects_for_user(request.user, "website.can_see"):
-            raise Http404("404")
+    else:
+        dump = get_object_or_404(Dump, index=request.GET.get("index"))
 
-        auth_users = [
-            user.pk
-            for user in get_user_model().objects.all()
-            if "can_see" in get_perms(user, dump) and user != request.user
-        ]
+    if dump not in get_objects_for_user(request.user, "website.can_see"):
+        raise Http404("404")
 
+    # GET OTHERS USERS
+    auth_users = [
+        user.pk
+        for user in get_user_model().objects.all()
+        if "can_see" in get_perms(user, dump) and user != request.user
+    ]
+
+    if request.method == "POST":
         form = EditDumpForm(
             data=request.POST,
             instance=dump,
             initial={"authorized_users": auth_users},
             user=request.user,
         )
-        if form.is_valid():
-            dump = form.save()
-            for user_pk in form.cleaned_data["authorized_users"]:
+
+        if dumpform.is_valid():
+            dump = dumpform.save()
+
+            # REFRESH PERMISSIONS
+            for user_pk in dumpform.cleaned_data["authorized_users"]:
                 user = get_user_model().objects.get(pk=user_pk)
                 if user.pk not in auth_users:
                     assign_perm(
@@ -652,12 +662,6 @@ def edit(request):
         else:
             data["form_is_valid"] = False
     else:
-        dump = get_object_or_404(Dump, index=request.GET.get("index"))
-        auth_users = [
-            user.pk
-            for user in get_user_model().objects.all()
-            if "can_see" in get_perms(user, dump) and user != request.user
-        ]
         form = EditDumpForm(
             instance=dump, initial={"authorized_users": auth_users}, user=request.user
         )
@@ -676,9 +680,7 @@ def index_f_and_f(dump_pk, user_pk):
     Run all plugin for a new index on dask
     """
     dask_client = Client(settings.DASK_SCHEDULER_URL)
-    fire_and_forget(
-        dask_client.submit(unzip_then_run, dump_pk, user_pk, settings.ELASTICSEARCH_URL)
-    )
+    fire_and_forget(dask_client.submit(unzip_then_run, dump_pk, user_pk))
 
 
 @login_required
@@ -773,8 +775,6 @@ def delete(request):
 ##############################
 # ADMIN
 ##############################
-
-
 def update_plugins(request):
     """
     Run management command to update plugins

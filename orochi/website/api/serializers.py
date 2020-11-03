@@ -145,6 +145,9 @@ class DumpSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     author = ShortUserSerializer(many=False, read_only=True)
     index = serializers.ReadOnlyField()
+    family = serializers.ReadOnlyField()
+    kernel = serializers.ReadOnlyField()
+    architecture = serializers.ReadOnlyField()
     upload = serializers.FileField(allow_empty_file=False, write_only=True)
     results = serializers.SerializerMethodField("results_url")
 
@@ -158,6 +161,9 @@ class DumpSerializer(serializers.ModelSerializer):
         model = Dump
         fields = [
             "operating_system",
+            "family",
+            "kernel",
+            "architecture",
             "name",
             "index",
             "author",
