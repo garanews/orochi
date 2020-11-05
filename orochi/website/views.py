@@ -89,9 +89,7 @@ def plugin_f_and_f(dump, plugin, params):
     Fire and forget plugin on dask
     """
     dask_client = Client(settings.DASK_SCHEDULER_URL)
-    fire_and_forget(
-        dask_client.submit(run_plugin, dump, plugin, settings.ELASTICSEARCH_URL, params)
-    )
+    fire_and_forget(dask_client.submit(run_plugin, dump, plugin, params))
 
 
 @login_required
@@ -627,11 +625,11 @@ def edit(request):
             user=request.user,
         )
 
-        if dumpform.is_valid():
-            dump = dumpform.save()
+        if form.is_valid():
+            dump = form.save()
 
             # REFRESH PERMISSIONS
-            for user_pk in dumpform.cleaned_data["authorized_users"]:
+            for user_pk in form.cleaned_data["authorized_users"]:
                 user = get_user_model().objects.get(pk=user_pk)
                 if user.pk not in auth_users:
                     assign_perm(
