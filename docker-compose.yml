@@ -36,7 +36,7 @@ services:
     build:
       context: .
       dockerfile: ./compose/local/postgres/Dockerfile
-    image: garanew/sorochi_local_postgres:latest
+    image: garanews/orochi_local_postgres:latest
     container_name: orochi_postgres
     volumes:
       - local_postgres_data:/var/lib/postgresql/data
