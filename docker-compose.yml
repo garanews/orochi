@@ -16,7 +16,7 @@ services:
       args:
         - http_proxy
         - https_proxy
-    image: orochi_local_django
+    image: garanews/orochi_local_django:latest
     container_name: orochi_django
     depends_on:
       - postgres
@@ -36,7 +36,7 @@ services:
     build:
       context: .
       dockerfile: ./compose/local/postgres/Dockerfile
-    image: orochi_local_postgres
+    image: garanew/sorochi_local_postgres:latest
     container_name: orochi_postgres
     volumes:
       - local_postgres_data:/var/lib/postgresql/data
@@ -92,7 +92,7 @@ services:
       args:
         - http_proxy
         - https_proxy
-    image: daskdev/dask
+    image: garanews/orochi_scheduler:latest
     container_name: orochi_scheduler
     hostname: dask-scheduler
     env_file:
@@ -109,7 +109,7 @@ services:
       args:
         - http_proxy
         - https_proxy
-    image: daskdev/dask
+    image: garanews/orochi_worker01:latest
     container_name: orochi_worker01
     command:
       [
@@ -140,7 +140,7 @@ services:
       args:
         - http_proxy
         - https_proxy
-    image: daskdev/dask
+    image: garanews/orochi_worker02:latest
     container_name: orochi_worker02
     command:
       [
