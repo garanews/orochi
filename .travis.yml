@@ -1,12 +1,22 @@
 language: bash
 
 sudo: required
+
 services:
   - docker
 
+env:
+  COMPOSE_VERSION: 1.27.4
+
+before_install:
+  # Docker Compose Install 
+  - curl -L https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+  - chmod +x docker-compose
+  - sudo mv docker-compose /usr/local/bin
+
 script:
   - ls
-  - docker build -t .
+  - docker-compose build
 after_success:
   - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
   - docker tag back $DOCKER_USER/back:$TRAVIS_BUILD_NUMBER
