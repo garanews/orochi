@@ -10,12 +10,12 @@ volumes:
 
 services:
   django: &django
-#    build:
-#      context: .
-#      dockerfile: ./compose/local/django/Dockerfile
-#      args:
-#        - http_proxy
-#        - https_proxy
+    build:
+      context: .
+      dockerfile: ./compose/local/django/Dockerfile
+      args:
+        - http_proxy
+        - https_proxy
     image: garanews/orochi_local_django:latest
     container_name: orochi_django
     depends_on:
@@ -33,9 +33,9 @@ services:
     command: /start
 
   postgres:
-#    build:
-#      context: .
-#      dockerfile: ./compose/local/postgres/Dockerfile
+    build:
+      context: .
+      dockerfile: ./compose/local/postgres/Dockerfile
     image: garanews/orochi_local_postgres:latest
     container_name: orochi_postgres
     volumes:
@@ -86,12 +86,12 @@ services:
       ELASTICSEARCH_HOSTS: http://es01:9200
 
   scheduler:
-#    build:
-#      context: .
-#      dockerfile: ./compose/local/dask/Dockerfile
-#      args:
-#        - http_proxy
-#        - https_proxy
+    build:
+      context: .
+      dockerfile: ./compose/local/dask/Dockerfile
+      args:
+        - http_proxy
+        - https_proxy
     image: garanews/orochi_scheduler:latest
     container_name: orochi_scheduler
     hostname: dask-scheduler
@@ -103,12 +103,12 @@ services:
     command: ["dask-scheduler"]
 
   worker01:
-#    build:
-#      context: .
-#      dockerfile: ./compose/local/dask/Dockerfile
-#      args:
-#        - http_proxy
-#        - https_proxy
+    build:
+      context: .
+      dockerfile: ./compose/local/dask/Dockerfile
+      args:
+        - http_proxy
+        - https_proxy
     image: garanews/orochi_worker01:latest
     container_name: orochi_worker01
     command:
@@ -134,12 +134,12 @@ services:
       - ./.envs/.local/.dask
 
   worker02:
-#    build:
-#      context: .
-#      dockerfile: ./compose/local/dask/Dockerfile
-#      args:
-#        - http_proxy
-#        - https_proxy
+    build:
+      context: .
+      dockerfile: ./compose/local/dask/Dockerfile
+      args:
+        - http_proxy
+        - https_proxy
     image: garanews/orochi_worker02:latest
     container_name: orochi_worker02
     command:
