@@ -15,7 +15,6 @@ before_install:
   - sudo mv docker-compose /usr/local/bin
 
 script:
-  - ls
   - docker-compose build
 after_success:
   - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
