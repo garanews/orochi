@@ -9,17 +9,17 @@ ALLOWED_HOSTS=*
 
 # Redis
 # ------------------------------------------------------------------------------
-REDIS_URL=redis://redis:6379/0
+REDIS_URL=redis://gararochi_redis:6379/0
 REDIS_SERVER=redis
 REDIS_PORT=6379
 
 # elasticsearch
 # ------------------------------------------------------------------------------
-ELASTICSEARCH_URL=http://es01:9200
+ELASTICSEARCH_URL=http://gararochi_es01:9200
 
 # Dask
 # ------------------------------------------------------------------------------
-DASK_SCHEDULER_URL=tcp://scheduler:8786
+DASK_SCHEDULER_URL=tcp://gararochi_scheduler:8786
 
 # Proxy
 # ------------------------------------------------------------------------------
